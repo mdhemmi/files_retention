@@ -14,6 +14,12 @@
 			{{ getAfter }}
 		</td>
 		<td class="retention-rule__action">
+			{{ getAction }}
+			<span v-if="movetopath" class="retention-rule__path">
+				→ {{ movetopath }}
+			</span>
+		</td>
+		<td class="retention-rule__action">
 			<NcButton variant="tertiary"
 				:aria-label="deleteLabel"
 				@click="onClickDelete">
@@ -61,6 +67,14 @@ export default {
 			type: Number,
 			required: true,
 		},
+		actiontype: {
+			type: Number,
+			default: 0,
+		},
+		movetopath: {
+			type: String,
+			default: null,
+		},
 		hasJob: {
 			type: Boolean,
 			required: true,
@@ -95,6 +109,17 @@ export default {
 				return t('files_retention', 'Creation')
 			default:
 				return t('files_retention', 'Last modification')
+			}
+		},
+
+		getAction() {
+			switch (this.actiontype) {
+			case 1:
+				return t('files_retention', 'Move to trash')
+			case 2:
+				return t('files_retention', 'Move to path')
+			default:
+				return t('files_retention', 'Delete')
 			}
 		},
 
@@ -135,6 +160,13 @@ export default {
 		padding-left: 10px;
 		flex-direction: row-reverse;
 		display: flex;
+	}
+
+	&__path {
+		display: block;
+		font-size: 0.9em;
+		color: var(--color-text-maxcontrast);
+		margin-top: 4px;
 	}
 }
 </style>

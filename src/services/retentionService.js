@@ -11,7 +11,17 @@ import { generateOcsUrl } from '@nextcloud/router'
  * @return {object} The axios response
  */
 const createRetentionRule = async function(rule) {
-	return axios.post(generateOcsUrl('/apps/files_retention/api/v1/retentions'), rule)
+	const params = {
+		tagid: rule.tagid,
+		timeunit: rule.timeunit,
+		timeamount: rule.timeamount,
+		timeafter: rule.timeafter,
+		actiontype: rule.actiontype ?? 0,
+	}
+	if (rule.movetopath) {
+		params.movetopath = rule.movetopath
+	}
+	return axios.post(generateOcsUrl('/apps/files_retention/api/v1/retentions'), params)
 }
 
 /**

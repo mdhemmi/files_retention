@@ -18,6 +18,9 @@
 					<th class="retention-heading__after">
 						{{ t('files_retention','From date of') }}
 					</th>
+					<th class="retention-heading__action">
+						{{ t('files_retention','Action') }}
+					</th>
 					<th class="retention-heading__action" />
 				</tr>
 			</thead>
@@ -62,9 +65,27 @@
 							label="label" />
 					</td>
 					<td class="retention-rule__action">
+						<NcSelect v-model="newAction"
+							:disabled="loading"
+							:options="actionOptions"
+							:allow-empty="false"
+							:clearable="false"
+							track-by="id"
+							label="label" />
+						<NcTextField v-if="newAction?.id === 2"
+							v-model="newMoveToPath"
+							:disabled="loading"
+							type="text"
+							:label="t('files_retention', 'Destination path')"
+							:placeholder="t('files_retention', 'e.g., archive/old-files')" />
+						<div v-if="newAction?.id === 2" class="retention-rule__info">
+							{{ t('files_retention', 'Archive folders are automatically hidden from mobile apps (prefixed with dot)') }}
+						</div>
+					</td>
+					<td class="retention-rule__action">
 						<div class="retention-rule__action--button-aligner">
 							<NcButton variant="success"
-								:disabled="loading || newTag < 0"
+								:disabled="loading || newTag < 0 || (newAction?.id === 2 && !newMoveToPath.trim())"
 								:aria-label="createLabel"
 								@click="onClickCreate">
 								<template #icon>
@@ -138,7 +159,15 @@ export default {
 			],
 			newAfter: {},
 
+			actionOptions: [
+				{ id: 0, label: t('files_retention', 'Delete') },
+				{ id: 1, label: t('files_retention', 'Move to trash') },
+				{ id: 2, label: t('files_retention', 'Move to path') },
+			],
+			newAction: {},
+
 			newAmount: '14', // FIXME TextField does not accept numbers …
+			newMoveToPath: '',
 
 			newTag: null,
 			tagOptions: [],
@@ -221,6 +250,7 @@ export default {
 			const newTag = this.newTag?.id ?? this.newTag
 			const newUnit = this.newUnit?.id ?? this.newUnit
 			const newAfter = this.newAfter?.id ?? this.newAfter
+			const newAction = this.newAction?.id ?? this.newAction
 			const newAmount = parseInt(this.newAmount, 10)
 
 			if (newTag === null || newTag < 0) {
@@ -245,18 +275,34 @@ export default {
 				return
 			}
 
+			if (newAction < 0 || newAction > 2) {
+				showError(t('files_retention', 'Invalid action type'))
+				return
+			}
+
+			if (newAction === 2 && (!this.newMoveToPath || !this.newMoveToPath.trim())) {
+				showError(t('files_retention', 'Destination path is required when moving to path'))
+				return
+			}
+
 			if (isNaN(newAmount) || newAmount < 1) {
 				showError(t('files_retention', 'Invalid retention time'))
 				return
 			}
 
 			try {
-				await this.$store.dispatch('createNewRule', {
+				const ruleData = {
 					tagid: newTag,
 					timeamount: newAmount,
 					timeunit: newUnit,
 					timeafter: newAfter,
-				})
+					actiontype: newAction,
+				}
+				if (newAction === 2) {
+					ruleData.movetopath = this.newMoveToPath.trim()
+				}
+
+				await this.$store.dispatch('createNewRule', ruleData)
 
 				showSuccess(t('files_retention', 'Retention rule for tag {tagName} saved', { tagName }))
 				this.resetForm()
@@ -271,17 +317,19 @@ export default {
 			this.newAmount = '14'
 			this.newUnit = this.unitOptions[0]
 			this.newAfter = this.afterOptions[0]
+			this.newAction = this.actionOptions[0]
+			this.newMoveToPath = ''
 		},
 	},
 }
 </script>
 
 <style scoped lang="scss">
-.retention-rules-table {
+	.retention-rules-table {
 	width: 100%;
 	min-height: 50px;
 	padding-top: 5px;
-	max-width: 580px;
+	max-width: 800px;
 
 	.retention-heading,
 	.retention-rule {
@@ -308,6 +356,10 @@ export default {
 			&--button-aligner {
 				margin-top: 6px;
 			}
+
+			> div {
+				width: 100%;
+			}
 		}
 	}
 
@@ -332,6 +384,13 @@ export default {
 			:deep(.input-field__input) {
 				text-align: right;
 			}
+		}
+
+		&__info {
+			font-size: 0.9em;
+			color: var(--color-text-maxcontrast);
+			margin-top: 8px;
+			font-style: italic;
 		}
 	}
 }

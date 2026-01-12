@@ -64,6 +64,8 @@ class APIController extends OCSController {
 				'timeunit' => (int)$data['time_unit'],
 				'timeamount' => (int)$data['time_amount'],
 				'timeafter' => (int)$data['time_after'],
+				'actiontype' => isset($data['action_type']) ? (int)$data['action_type'] : Constants::ACTION_DELETE,
+				'movetopath' => $data['move_to_path'] ?? null,
 				'hasJob' => true,
 			];
 		}
@@ -91,12 +93,15 @@ class APIController extends OCSController {
 	 * @param positive-int $timeamount Amount of time units that have to be passed
 	 * @param 0|1 $timeafter Whether retention time is based creation time (0) or modification time (1)
 	 * @psalm-param Constants::MODE_* $timeafter
-	 * @return DataResponse<Http::STATUS_BAD_REQUEST, array{error: 'tagid'|'timeunit'|'timeamount'|'timeafter'}, array{}>|DataResponse<Http::STATUS_CREATED, Files_RetentionRule, array{}>
+	 * @param 0|1|2 $actiontype Action to perform: delete (0), move to trash (1), move to path (2)
+	 * @psalm-param Constants::ACTION_* $actiontype
+	 * @param string|null $movetopath Destination path when action_type is ACTION_MOVE_PATH
+	 * @return DataResponse<Http::STATUS_BAD_REQUEST, array{error: 'tagid'|'timeunit'|'timeamount'|'timeafter'|'actiontype'|'movetopath'}, array{}>|DataResponse<Http::STATUS_CREATED, Files_RetentionRule, array{}>
 	 *
 	 * 201: Retention rule created
 	 * 400: At least one of the parameters was invalid
 	 */
-	public function addRetention(int $tagid, int $timeunit, int $timeamount, int $timeafter = Constants::MODE_CTIME): DataResponse {
+	public function addRetention(int $tagid, int $timeunit, int $timeamount, int $timeafter = Constants::MODE_CTIME, int $actiontype = Constants::ACTION_DELETE, ?string $movetopath = null): DataResponse {
 		try {
 			$this->tagManager->getTagsByIds((string)$tagid);
 		} catch (\InvalidArgumentException) {
@@ -112,13 +117,24 @@ class APIController extends OCSController {
 		if ($timeafter < 0 || $timeafter > 1) {
 			return new DataResponse(['error' => 'timeafter'], Http::STATUS_BAD_REQUEST);
 		}
+		if ($actiontype < 0 || $actiontype > 2) {
+			return new DataResponse(['error' => 'actiontype'], Http::STATUS_BAD_REQUEST);
+		}
+		if ($actiontype === Constants::ACTION_MOVE_PATH && (empty($movetopath) || trim($movetopath) === '')) {
+			return new DataResponse(['error' => 'movetopath'], Http::STATUS_BAD_REQUEST);
+		}
+		if ($actiontype !== Constants::ACTION_MOVE_PATH && $movetopath !== null) {
+			$movetopath = null;
+		}
 
 		$qb = $this->db->getQueryBuilder();
 		$qb->insert('retention')
 			->setValue('tag_id', $qb->createNamedParameter($tagid))
 			->setValue('time_unit', $qb->createNamedParameter($timeunit))
 			->setValue('time_amount', $qb->createNamedParameter($timeamount))
-			->setValue('time_after', $qb->createNamedParameter($timeafter));
+			->setValue('time_after', $qb->createNamedParameter($timeafter))
+			->setValue('action_type', $qb->createNamedParameter($actiontype))
+			->setValue('move_to_path', $qb->createNamedParameter($movetopath));
 
 		$qb->executeStatement();
 		$id = $qb->getLastInsertId();
@@ -132,6 +148,8 @@ class APIController extends OCSController {
 			'timeunit' => $timeunit,
 			'timeamount' => $timeamount,
 			'timeafter' => $timeafter,
+			'actiontype' => $actiontype,
+			'movetopath' => $movetopath,
 			'hasJob' => true,
 		], Http::STATUS_CREATED);
 	}

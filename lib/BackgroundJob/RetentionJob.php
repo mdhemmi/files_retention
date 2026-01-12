@@ -16,6 +16,7 @@ use OCP\BackgroundJob\IJobList;
 use OCP\BackgroundJob\TimedJob;
 use OCP\Files\Config\ICachedMountFileInfo;
 use OCP\Files\Config\IUserMountCache;
+use OCP\Files\Folder;
 use OCP\Files\IRootFolder;
 use OCP\Files\Node;
 use OCP\Files\NotFoundException;
@@ -100,6 +101,8 @@ class RetentionJob extends TimedJob {
 		}
 
 		$timeAfter = (int)$data['time_after'];
+		$actionType = isset($data['action_type']) ? (int)$data['action_type'] : Constants::ACTION_DELETE;
+		$moveToPath = $data['move_to_path'] ?? null;
 
 		$offset = '';
 		$limit = 1000;
@@ -118,9 +121,9 @@ class RetentionJob extends TimedJob {
 					continue;
 				}
 
-				$deleted = $this->expireNode($node, $deleteBefore, $timeAfter);
+				$processed = $this->expireNode($node, $deleteBefore, $timeAfter, $actionType, $moveToPath);
 
-				if ($notifyDayBefore && !$deleted) {
+				if ($notifyDayBefore && !$processed) {
 					$this->notifyNode($node, $notifyBefore, $timeAfter);
 				}
 			}
@@ -210,16 +213,24 @@ class RetentionJob extends TimedJob {
 		return $time;
 	}
 
-	private function expireNode(Node $node, \DateTime $deleteBefore, int $timeAfter): bool {
+	private function expireNode(Node $node, \DateTime $deleteBefore, int $timeAfter, int $actionType, ?string $moveToPath): bool {
 		$time = $this->getDateFromNode($node, $timeAfter);
 
 		if ($time < $deleteBefore) {
-			$this->logger->debug('Expiring file ' . $node->getId());
+			$this->logger->debug('Expiring file ' . $node->getId() . ' with action type ' . $actionType);
 			try {
-				$node->delete();
-				return true;
+				if ($actionType === Constants::ACTION_DELETE) {
+					$node->delete();
+					return true;
+				} elseif ($actionType === Constants::ACTION_MOVE_TRASH) {
+					$this->moveToTrash($node);
+					return true;
+				} elseif ($actionType === Constants::ACTION_MOVE_PATH && $moveToPath !== null) {
+					$this->moveToPath($node, $moveToPath);
+					return true;
+				}
 			} catch (Exception $e) {
-				$this->logger->debug($e->getMessage(), [
+				$this->logger->error('Failed to process file ' . $node->getId() . ': ' . $e->getMessage(), [
 					'exception' => $e,
 				]);
 			}
@@ -228,6 +239,113 @@ class RetentionJob extends TimedJob {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Move a node to the trash bin
+	 *
+	 * @param Node $node The node to move to trash
+	 * @throws Exception
+	 */
+	private function moveToTrash(Node $node): void {
+		$userId = $node->getOwner()->getUID();
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		
+		// Get the trash folder path
+		$trashPath = $userFolder->getPath() . '/.trash';
+		
+		try {
+			$trashNode = $userFolder->get('.trash');
+			if (!$trashNode instanceof Folder) {
+				throw new NotPermittedException('.trash exists but is not a folder');
+			}
+			$trashFolder = $trashNode;
+		} catch (NotFoundException $e) {
+			// Create trash folder if it doesn't exist
+			$trashFolder = $userFolder->newFolder('.trash');
+		}
+		
+		// Generate unique filename to avoid conflicts
+		$fileName = $node->getName();
+		$timestamp = time();
+		$baseName = pathinfo($fileName, PATHINFO_FILENAME);
+		$extension = pathinfo($fileName, PATHINFO_EXTENSION);
+		$uniqueName = $baseName . '.' . $timestamp . ($extension ? '.' . $extension : '');
+		
+		// If file with this name already exists, append counter
+		$counter = 0;
+		while ($trashFolder->nodeExists($uniqueName)) {
+			$counter++;
+			$uniqueName = $baseName . '.' . $timestamp . '.' . $counter . ($extension ? '.' . $extension : '');
+		}
+		
+		$node->move($trashFolder->getPath() . '/' . $uniqueName);
+		$this->logger->debug('Moved file ' . $node->getId() . ' to trash as ' . $uniqueName);
+	}
+
+	/**
+	 * Move a node to a specific path
+	 *
+	 * @param Node $node The node to move
+	 * @param string $destinationPath The destination path (relative to user's files folder)
+	 * @throws Exception
+	 */
+	private function moveToPath(Node $node, string $destinationPath): void {
+		$userId = $node->getOwner()->getUID();
+		$userFolder = $this->rootFolder->getUserFolder($userId);
+		
+		// Normalize the path (remove leading/trailing slashes)
+		$destinationPath = trim($destinationPath, '/');
+		
+		// Ensure the destination directory exists
+		$pathParts = explode('/', $destinationPath);
+		$currentPath = '';
+		$currentFolder = $userFolder;
+		$actualPathParts = []; // Track the actual path with dot prefix for mobile hiding
+		
+		foreach ($pathParts as $index => $part) {
+			if (empty($part)) {
+				continue;
+			}
+			
+			// Hide from mobile apps: prefix the first folder component with a dot if it doesn't already start with one
+			// This ensures mobile apps won't see the archive folder (similar to .trash)
+			$actualPart = $part;
+			if ($index === 0 && !str_starts_with($part, '.')) {
+				$actualPart = '.' . $part;
+				$this->logger->debug('Prefixing archive folder with dot to hide from mobile apps: ' . $actualPart);
+			}
+			$actualPathParts[] = $actualPart;
+			
+			$currentPath .= '/' . $actualPart;
+			try {
+				$pathNode = $userFolder->get($currentPath);
+				if (!$pathNode instanceof Folder) {
+					throw new NotPermittedException("Path component $currentPath is not a folder");
+				}
+				$currentFolder = $pathNode;
+			} catch (NotFoundException $e) {
+				// Create the directory if it doesn't exist
+				$currentFolder = $currentFolder->newFolder($actualPart);
+			}
+		}
+		
+		// Generate unique filename to avoid conflicts
+		$fileName = $node->getName();
+		$baseName = pathinfo($fileName, PATHINFO_FILENAME);
+		$extension = pathinfo($fileName, PATHINFO_EXTENSION);
+		$uniqueName = $fileName;
+		
+		// If file with this name already exists, append counter
+		$counter = 0;
+		while ($currentFolder->nodeExists($uniqueName)) {
+			$counter++;
+			$uniqueName = $baseName . ' (' . $counter . ')' . ($extension ? '.' . $extension : '');
+		}
+		
+		$node->move($currentFolder->getPath() . '/' . $uniqueName);
+		$actualDestinationPath = implode('/', $actualPathParts);
+		$this->logger->debug('Moved file ' . $node->getId() . ' to ' . $actualDestinationPath . '/' . $uniqueName . ' (hidden from mobile apps)');
 	}
 
 	private function notifyNode(Node $node, \DateTime $notifyBefore, int $timeAfter): void {

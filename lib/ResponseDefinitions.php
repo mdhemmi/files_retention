@@ -18,6 +18,10 @@ namespace OCA\Files_Retention;
  *     timeamount: positive-int,
  *     // 0 creation time, 1 modification time
  *     timeafter: 0|1,
+ *     // 0 delete, 1 move to trash, 2 move to path
+ *     actiontype: 0|1|2,
+ *     // Destination path when actiontype is 2, null otherwise
+ *     movetopath: string|null,
  *     hasJob: bool,
  * }
  */

@@ -15,4 +15,8 @@ class Constants {
 
 	public const MODE_CTIME = 0;
 	public const MODE_MTIME = 1;
+
+	public const ACTION_DELETE = 0;
+	public const ACTION_MOVE_TRASH = 1;
+	public const ACTION_MOVE_PATH = 2;
 }

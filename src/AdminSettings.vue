@@ -65,21 +65,24 @@
 							label="label" />
 					</td>
 					<td class="retention-rule__action">
-						<NcSelect v-model="newAction"
-							:disabled="loading"
-							:options="actionOptions"
-							:allow-empty="false"
-							:clearable="false"
-							track-by="id"
-							label="label" />
-						<NcTextField v-if="newAction?.id === 2"
-							v-model="newMoveToPath"
-							:disabled="loading"
-							type="text"
-							:label="t('files_retention', 'Destination path')"
-							:placeholder="t('files_retention', 'e.g., archive/old-files')" />
-						<div v-if="newAction?.id === 2" class="retention-rule__info">
-							{{ t('files_retention', 'Archive folders are automatically hidden from mobile apps (prefixed with dot)') }}
+						<div class="retention-rule__action-content">
+							<NcSelect v-model="newAction"
+								:disabled="loading"
+								:options="actionOptions"
+								:allow-empty="false"
+								:clearable="false"
+								track-by="id"
+								label="label" />
+							<NcTextField v-if="newAction?.id === 2"
+								v-model="newMoveToPath"
+								:disabled="loading"
+								type="text"
+								:label="t('files_retention', 'Destination path')"
+								:placeholder="t('files_retention', 'e.g., archive/old-files')"
+								class="retention-rule__path-input" />
+							<div v-if="newAction?.id === 2" class="retention-rule__info">
+								{{ t('files_retention', 'Archive folders are automatically hidden from mobile apps (prefixed with dot)') }}
+							</div>
 						</div>
 					</td>
 					<td class="retention-rule__action">
@@ -329,7 +332,7 @@ export default {
 	width: 100%;
 	min-height: 50px;
 	padding-top: 5px;
-	max-width: 800px;
+	max-width: 100%;
 
 	.retention-heading,
 	.retention-rule {
@@ -340,25 +343,28 @@ export default {
 		&__action {
 			color: var(--color-text-maxcontrast);
 			padding: 10px 10px 10px 0;
-			vertical-align: bottom;
+			vertical-align: top;
+		}
+
+		&__name {
+			min-width: 150px;
 		}
 
 		&__time {
 			text-align: center;
-			min-width: 320px;
+			min-width: 280px;
+		}
+
+		&__after {
+			min-width: 150px;
 		}
 
 		&__action {
+			min-width: 200px;
 			padding-left: 10px;
-			flex-direction: row-reverse;
-			display: flex;
 
 			&--button-aligner {
 				margin-top: 6px;
-			}
-
-			> div {
-				width: 100%;
 			}
 		}
 	}
@@ -379,6 +385,11 @@ export default {
 				width: 49%;
 				min-width: 0;
 				display: inline-block;
+				margin-right: 2%;
+			}
+
+			> div:last-child {
+				margin-right: 0;
 			}
 
 			:deep(.input-field__input) {
@@ -386,11 +397,29 @@ export default {
 			}
 		}
 
-		&__info {
-			font-size: 0.9em;
-			color: var(--color-text-maxcontrast);
+		&__action {
+			&-content {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+			}
+
+			&--button-aligner {
+				display: flex;
+				justify-content: flex-end;
+			}
+		}
+
+		&__path-input {
 			margin-top: 8px;
+		}
+
+		&__info {
+			font-size: 0.85em;
+			color: var(--color-text-maxcontrast);
+			margin-top: 4px;
 			font-style: italic;
+			line-height: 1.4;
 		}
 	}
 }

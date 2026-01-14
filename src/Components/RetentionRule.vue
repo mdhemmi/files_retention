@@ -158,8 +158,13 @@ export default {
 
 	&__action {
 		padding-left: 10px;
-		flex-direction: row-reverse;
-		display: flex;
+		min-width: 200px;
+
+		&:last-child {
+			display: flex;
+			justify-content: flex-end;
+			min-width: auto;
+		}
 	}
 
 	&__path {
@@ -167,6 +172,7 @@ export default {
 		font-size: 0.9em;
 		color: var(--color-text-maxcontrast);
 		margin-top: 4px;
+		word-break: break-word;
 	}
 }
 </style>

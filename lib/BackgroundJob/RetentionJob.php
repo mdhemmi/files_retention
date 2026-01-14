@@ -121,7 +121,7 @@ class RetentionJob extends TimedJob {
 					continue;
 				}
 
-				$processed = $this->expireNode($node, $deleteBefore, $timeAfter, $actionType, $moveToPath);
+				$processed = $this->expireNode($node, $deleteBefore, $timeAfter, $actionType, $moveToPath, (string)$tag);
 
 				if ($notifyDayBefore && !$processed) {
 					$this->notifyNode($node, $notifyBefore, $timeAfter);
@@ -213,7 +213,7 @@ class RetentionJob extends TimedJob {
 		return $time;
 	}
 
-	private function expireNode(Node $node, \DateTime $deleteBefore, int $timeAfter, int $actionType, ?string $moveToPath): bool {
+	private function expireNode(Node $node, \DateTime $deleteBefore, int $timeAfter, int $actionType, ?string $moveToPath, string $tagId): bool {
 		$time = $this->getDateFromNode($node, $timeAfter);
 
 		if ($time < $deleteBefore) {
@@ -224,9 +224,13 @@ class RetentionJob extends TimedJob {
 					return true;
 				} elseif ($actionType === Constants::ACTION_MOVE_TRASH) {
 					$this->moveToTrash($node);
+					// Remove tag after moving to prevent mobile apps from re-uploading
+					$this->removeTagFromFile($node->getId(), $tagId);
 					return true;
 				} elseif ($actionType === Constants::ACTION_MOVE_PATH && $moveToPath !== null) {
 					$this->moveToPath($node, $moveToPath);
+					// Remove tag after moving to prevent mobile apps from re-uploading
+					$this->removeTagFromFile($node->getId(), $tagId);
 					return true;
 				}
 			} catch (Exception $e) {
@@ -239,6 +243,26 @@ class RetentionJob extends TimedJob {
 		}
 
 		return false;
+	}
+
+	/**
+	 * Remove the retention tag from a file after it has been processed
+	 * This helps prevent mobile apps from re-uploading the file, as the tag
+	 * that triggered the retention rule is no longer present.
+	 *
+	 * @param int $fileId The file ID
+	 * @param string $tagId The tag ID to remove
+	 */
+	private function removeTagFromFile(int $fileId, string $tagId): void {
+		try {
+			$this->tagMapper->unassignTags($fileId, 'files', [$tagId]);
+			$this->logger->debug('Removed retention tag ' . $tagId . ' from file ' . $fileId . ' to prevent re-uploading');
+		} catch (Exception $e) {
+			// Log but don't fail - tag removal is best effort
+			$this->logger->warning('Failed to remove tag ' . $tagId . ' from file ' . $fileId . ': ' . $e->getMessage(), [
+				'exception' => $e,
+			]);
+		}
 	}
 
 	/**

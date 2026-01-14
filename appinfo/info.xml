@@ -28,7 +28,7 @@ Optionally the users can be informed the day before.</description>
 	<screenshot>https://raw.githubusercontent.com/nextcloud/files_retention/master/screenshots/1.png</screenshot>
 
 	<dependencies>
-		<nextcloud min-version="33" max-version="33" />
+		<nextcloud min-version="28" max-version="33" />
 	</dependencies>
 
 	<settings>

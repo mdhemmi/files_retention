@@ -73,22 +73,15 @@
 								:clearable="false"
 								track-by="id"
 								label="label" />
-							<NcTextField v-if="newAction?.id === 2"
-								v-model="newMoveToPath"
-								:disabled="loading"
-								type="text"
-								:label="t('files_retention', 'Destination path')"
-								:placeholder="t('files_retention', 'e.g., archive/old-files')"
-								class="retention-rule__path-input" />
 							<div v-if="newAction?.id === 2" class="retention-rule__info">
-								{{ t('files_retention', 'Archive folders are automatically hidden from mobile apps (prefixed with dot)') }}
+								{{ t('files_retention', 'Files will be moved to .archive folder (hidden from mobile apps)') }}
 							</div>
 						</div>
 					</td>
 					<td class="retention-rule__action">
 						<div class="retention-rule__action--button-aligner">
 							<NcButton variant="success"
-								:disabled="loading || newTag < 0 || (newAction?.id === 2 && !newMoveToPath.trim())"
+								:disabled="loading || newTag < 0"
 								:aria-label="createLabel"
 								@click="onClickCreate">
 								<template #icon>
@@ -170,7 +163,6 @@ export default {
 			newAction: {},
 
 			newAmount: '14', // FIXME TextField does not accept numbers …
-			newMoveToPath: '',
 
 			newTag: null,
 			tagOptions: [],
@@ -283,11 +275,6 @@ export default {
 				return
 			}
 
-			if (newAction === 2 && (!this.newMoveToPath || !this.newMoveToPath.trim())) {
-				showError(t('files_retention', 'Destination path is required when moving to path'))
-				return
-			}
-
 			if (isNaN(newAmount) || newAmount < 1) {
 				showError(t('files_retention', 'Invalid retention time'))
 				return
@@ -301,8 +288,9 @@ export default {
 					timeafter: newAfter,
 					actiontype: newAction,
 				}
+				// Always use 'archive' as path - backend will prefix with dot automatically
 				if (newAction === 2) {
-					ruleData.movetopath = this.newMoveToPath.trim()
+					ruleData.movetopath = 'archive'
 				}
 
 				await this.$store.dispatch('createNewRule', ruleData)
@@ -321,7 +309,6 @@ export default {
 			this.newUnit = this.unitOptions[0]
 			this.newAfter = this.afterOptions[0]
 			this.newAction = this.actionOptions[0]
-			this.newMoveToPath = ''
 		},
 	},
 }
@@ -408,10 +395,6 @@ export default {
 				display: flex;
 				justify-content: flex-end;
 			}
-		}
-
-		&__path-input {
-			margin-top: 8px;
 		}
 
 		&__info {

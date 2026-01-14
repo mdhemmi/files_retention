@@ -120,10 +120,10 @@ class APIController extends OCSController {
 		if ($actiontype < 0 || $actiontype > 2) {
 			return new DataResponse(['error' => 'actiontype'], Http::STATUS_BAD_REQUEST);
 		}
-		if ($actiontype === Constants::ACTION_MOVE_PATH && (empty($movetopath) || trim($movetopath) === '')) {
-			return new DataResponse(['error' => 'movetopath'], Http::STATUS_BAD_REQUEST);
-		}
-		if ($actiontype !== Constants::ACTION_MOVE_PATH && $movetopath !== null) {
+		// Always use 'archive' as the path when moving to path (will be prefixed with dot automatically)
+		if ($actiontype === Constants::ACTION_MOVE_PATH) {
+			$movetopath = 'archive';
+		} else {
 			$movetopath = null;
 		}
 
